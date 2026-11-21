@@ -1,4 +1,21 @@
-# OpenBot
+# BossyBot
+
+> **BossyBot** is a fork of [OpenBot](https://github.com/nightly-labs/openbot) by Synthetify Labs, shared under the
+> [PolyForm Noncommercial License 1.0.0](LICENSE). The website in [`site/`](site) is new; the desktop app below is still the upstream OpenBot code.
+
+## Try it in your browser: 100 agents, nothing to install
+
+[`site/`](site) is a static page with one boss square on top and 100 agent squares below.
+Click an empty square to hire a bot (name, role, icon, color, instructions). Click a hired square to open its chat.
+The team and chats are saved in your browser. Add an Anthropic API key under the gear icon for real replies; without one, bots answer in demo mode.
+The key stays in your browser and is sent only to `api.anthropic.com`.
+
+Preview locally: `cd site && python -m http.server 8080`, then open <http://localhost:8080>.
+Deploy: the `Deploy BossyBot site` workflow publishes `site/` to GitHub Pages (Settings > Pages > Source: GitHub Actions).
+
+---
+
+## OpenBot desktop app (upstream)
 
 [![CI](https://github.com/nightly-labs/openbot/actions/workflows/ci.yml/badge.svg)](https://github.com/nightly-labs/openbot/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-PolyForm_Noncommercial_1.0.0-blue.svg)](LICENSE)

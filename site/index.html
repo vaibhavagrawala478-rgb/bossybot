@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BossyBot - Boss around 100 AI agents</title>
+  <meta name="description" content="BossyBot is a command center for 100 AI agents. Use it right in your browser with nothing to install, or download the desktop app.">
+  <meta name="theme-color" content="#06060c">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23ff4d6d'/%3E%3Cstop offset='1' stop-color='%23ffb340'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M16 44V24l8 8 8-12 8 12 8-8v20z' fill='%2306060c'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <span class="orb o1"></span><span class="orb o2"></span><span class="orb o3"></span>
+    <span class="lines"></span>
+  </div>
+
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="BossyBot home"><span class="mark" aria-hidden="true"></span>BossyBot</a>
+    <nav aria-label="Main">
+      <a href="#agents">Agents</a>
+      <a href="#download">Download</a>
+      <a href="https://github.com/vaibhavagrawala478-rgb/bossybot" rel="noopener">GitHub</a>
+      <button class="icon-btn" id="open-settings" type="button" aria-label="Settings" title="Settings">&#9881;</button>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="pill"><span class="live"></span> 100 agents &middot; zero install</p>
+      <h1>Boss around <span class="grad">100 AI agents</span>.<br>Right in your browser.</h1>
+      <p class="sub">One boss. A hundred squares. Click an empty one to hire a bot, click a filled one to chat with it. No download, no account.</p>
+      <div class="cta">
+        <a class="btn primary" href="#agents">Open the command center</a>
+        <a class="btn ghost" href="#download">Get the desktop app</a>
+      </div>
+    </section>
+
+    <section class="command" id="agents" aria-labelledby="agents-h">
+      <h2 id="agents-h" class="sr-only">Command center</h2>
+
+      <div class="boss-wrap">
+        <button class="boss" id="boss" type="button" aria-label="Chat with Bossy, the boss bot">
+          <span class="face">
+            <span class="crown" aria-hidden="true">&#128081;</span>
+            <span class="boss-name">Bossy</span>
+          </span>
+        </button>
+        <p class="boss-hint">The boss. Knows your whole team.</p>
+      </div>
+
+      <div class="beam" aria-hidden="true"></div>
+      <div class="bus" aria-hidden="true"></div>
+
+      <div class="grid-shell">
+        <div class="grid" id="grid" role="list" aria-label="100 agent slots"></div>
+      </div>
+
+      <div class="toolbar">
+        <p class="count"><strong id="count">0</strong> / 100 agents hired</p>
+        <div class="tools">
+          <button class="btn small" id="summon" type="button">&#9889; Summon all 100</button>
+          <button class="btn small ghost" id="reset" type="button">Reset</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="features" aria-label="Why BossyBot">
+      <article><h3>Nothing to install</h3><p>Open the page and start chatting. Your team lives in your browser.</p></article>
+      <article><h3>Bring your own key</h3><p>Paste an Anthropic API key in Settings for real replies. It stays on your device and goes only to Anthropic. No key? Demo mode still works.</p></article>
+      <article><h3>Desktop app too</h3><p>Want persistent agents with their own workspaces, files and a browser? Grab the full app below.</p></article>
+    </section>
+
+    <section class="download" id="download" aria-labelledby="dl-h">
+      <h2 id="dl-h">Download the desktop app</h2>
+      <p class="sub" id="dl-sub">Prefer a real app? The desktop build runs agents with their own workspaces. <span id="dl-version"></span></p>
+      <div class="dl-grid" id="dl-grid">
+        <article class="dl-card" data-os="mac">
+          <div class="os-ico" aria-hidden="true">&#63743;</div>
+          <h3>macOS</h3><p>Apple silicon or Intel</p>
+          <a class="btn primary" data-asset="mac-arm64" href="https://github.com/nightly-labs/openbot/releases/latest" rel="noopener">Apple silicon (.dmg)</a>
+          <a class="btn ghost" data-asset="mac-x64" href="https://github.com/nightly-labs/openbot/releases/latest" rel="noopener">Intel (.dmg)</a>
+        </article>
+        <article class="dl-card" data-os="win">
+          <div class="os-ico" aria-hidden="true">&#8862;</div>
+          <h3>Windows</h3><p>Windows 10 or newer, x64</p>
+          <a class="btn primary" data-asset="win-x64" href="https://github.com/nightly-labs/openbot/releases/latest" rel="noopener">Download (.exe)</a>
+        </article>
+        <article class="dl-card" data-os="linux">
+          <div class="os-ico" aria-hidden="true">&#128039;</div>
+          <h3>Linux</h3><p>AppImage, x64 or arm64</p>
+          <a class="btn primary" data-asset="linux-x64" href="https://github.com/nightly-labs/openbot/releases/latest" rel="noopener">x64 (.AppImage)</a>
+          <a class="btn ghost" data-asset="linux-arm64" href="https://github.com/nightly-labs/openbot/releases/latest" rel="noopener">arm64 (.AppImage)</a>
+        </article>
+      </div>
+      <p class="fine">Installers come from the upstream OpenBot project, which BossyBot is built on.</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>BossyBot is a fork of <a href="https://github.com/nightly-labs/openbot" rel="noopener">OpenBot</a> by Synthetify Labs, shared under the <a href="https://polyformproject.org/licenses/noncommercial/1.0.0" rel="noopener">PolyForm Noncommercial License 1.0.0</a>.</p>
+  </footer>
+
+  <!-- Add / edit bot -->
+  <dialog id="bot-dialog" aria-labelledby="bot-title">
+    <form method="dialog" id="bot-form" autocomplete="off">
+      <header class="dlg-head">
+        <h2 id="bot-title">Hire a bot</h2>
+        <span class="slot-tag" id="bot-slot"></span>
+      </header>
+
+      <label class="field"><span>Name</span>
+        <input id="f-name" required maxlength="24" placeholder="e.g. Ada">
+      </label>
+
+      <fieldset class="field"><legend>Role</legend>
+        <div class="chips" id="f-roles" role="group"></div>
+      </fieldset>
+
+      <div class="row">
+        <label class="field narrow"><span>Icon</span>
+          <input id="f-emoji" maxlength="4" aria-label="Icon (emoji)">
+        </label>
+        <fieldset class="field"><legend>Color</legend>
+          <div class="swatches" id="f-colors" role="group"></div>
+        </fieldset>
+      </div>
+
+      <label class="field"><span>Instructions</span>
+        <textarea id="f-prompt" rows="4" maxlength="1200" placeholder="How should this bot behave?"></textarea>
+      </label>
+
+      <footer class="dlg-foot">
+        <button class="btn ghost" id="bot-cancel" type="button">Cancel</button>
+        <button class="btn primary" id="bot-save" type="submit">Hire bot</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Settings -->
+  <dialog id="settings-dialog" aria-labelledby="set-title">
+    <form method="dialog" id="settings-form" autocomplete="off">
+      <header class="dlg-head"><h2 id="set-title">Settings</h2></header>
+      <p class="note">Add an Anthropic API key for real AI replies. The key is saved only in this browser and is sent only to api.anthropic.com. Without one, bots answer in demo mode.</p>
+      <label class="field"><span>Anthropic API key</span>
+        <input id="s-key" type="password" placeholder="sk-ant-..." spellcheck="false">
+      </label>
+      <label class="field"><span>Model</span>
+        <input id="s-model" placeholder="claude-sonnet-5-5" spellcheck="false">
+      </label>
+      <footer class="dlg-foot">
+        <button class="btn ghost" id="s-clear" type="button">Remove key</button>
+        <button class="btn ghost" id="s-cancel" type="button">Cancel</button>
+        <button class="btn primary" type="submit">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Chat drawer -->
+  <div class="scrim" id="scrim" hidden></div>
+  <aside class="chat" id="chat" role="dialog" aria-modal="true" aria-labelledby="chat-name" aria-hidden="true">
+    <header class="chat-head">
+      <span class="avatar" id="chat-avatar" aria-hidden="true"></span>
+      <div class="who">
+        <h2 id="chat-name">Bot</h2>
+        <p id="chat-role"></p>
+      </div>
+      <div class="chat-actions">
+        <button class="icon-btn" id="chat-edit" type="button" title="Edit bot" aria-label="Edit bot">&#9998;</button>
+        <button class="icon-btn" id="chat-clear" type="button" title="Clear chat" aria-label="Clear chat">&#8635;</button>
+        <button class="icon-btn" id="chat-remove" type="button" title="Remove bot" aria-label="Remove bot">&#128465;</button>
+        <button class="icon-btn" id="chat-close" type="button" title="Close" aria-label="Close chat">&#10005;</button>
+      </div>
+    </header>
+    <p class="demo-banner" id="demo-banner" hidden>Demo mode. Add an API key in <button type="button" class="link" id="banner-settings">Settings</button> for real AI replies.</p>
+    <div class="msgs" id="msgs" aria-live="polite"></div>
+    <form class="composer" id="composer">
+      <textarea id="c-input" rows="1" placeholder="Message..." aria-label="Message"></textarea>
+      <button class="btn primary" id="c-send" type="submit">Send</button>
+    </form>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
