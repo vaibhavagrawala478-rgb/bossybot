@@ -148,7 +148,13 @@
       <button class="icon-btn" id="s-close" type="button" aria-label="Close">&#10005;</button>
     </header>
     <p class="note">Connect any provider you already have access to. Once connected, your account's models unlock and every other model stays locked. Keys are saved only in this browser and are sent only to that provider.</p>
-    <p class="note">ChatGPT and Claude chat subscriptions can't be linked to a website, because those providers don't offer a login for it. The desktop app can use them. OpenRouter sign-in is the closest thing to "log in with an account".</p>
+    <div class="subs">
+      <div>
+        <strong>Have a subscription instead of an API key?</strong>
+        <p>Claude Pro/Max and ChatGPT Plus/Pro sign in through each provider's own login page, and the desktop app does that for you. This website can't: Anthropic doesn't allow third-party sites to log in with Claude.ai accounts or route requests through subscription plans. OpenRouter below is the one real "sign in" available on the web.</p>
+      </div>
+      <a class="btn small primary" id="subs-dl" href="#download">Get the desktop app</a>
+    </div>
     <div class="prov-list" id="prov-list"></div>
   </dialog>
 
