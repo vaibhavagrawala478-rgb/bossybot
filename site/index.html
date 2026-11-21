@@ -21,7 +21,7 @@
       <a href="#agents">Agents</a>
       <a href="#download">Download</a>
       <a href="https://github.com/vaibhavagrawala478-rgb/bossybot" rel="noopener">GitHub</a>
-      <button class="icon-btn" id="open-settings" type="button" aria-label="Settings" title="Settings">&#9881;</button>
+      <button class="btn small" id="open-settings" type="button">&#128279; Connect models <span class="badge" id="nav-badge" hidden>0</span></button>
     </nav>
   </header>
 
@@ -57,7 +57,7 @@
       </div>
 
       <div class="toolbar">
-        <p class="count"><strong id="count">0</strong> / 100 agents hired</p>
+        <div class="stats"><p class="count"><strong id="count">0</strong> / 100 agents hired</p><button class="chipbtn" id="model-status" type="button">No models connected</button></div>
         <div class="tools">
           <button class="btn small" id="summon" type="button">&#9889; Summon all 100</button>
           <button class="btn small ghost" id="reset" type="button">Reset</button>
@@ -67,7 +67,7 @@
 
     <section class="features" aria-label="Why BossyBot">
       <article><h3>Nothing to install</h3><p>Open the page and start chatting. Your team lives in your browser.</p></article>
-      <article><h3>Bring your own key</h3><p>Paste an Anthropic API key in Settings for real replies. It stays on your device and goes only to Anthropic. No key? Demo mode still works.</p></article>
+      <article><h3>Bring any model</h3><p>Connect Claude, GPT, Gemini, Grok, Mistral, DeepSeek, OpenRouter (hundreds more) or a model on your own computer. Keys stay in your browser, and you only unlock models your account can use.</p></article>
       <article><h3>Desktop app too</h3><p>Want persistent agents with their own workspaces, files and a browser? Grab the full app below.</p></article>
     </section>
 
@@ -126,6 +126,10 @@
         </fieldset>
       </div>
 
+      <label class="field"><span>Model</span>
+        <select id="f-model"></select>
+      </label>
+
       <label class="field"><span>Instructions</span>
         <textarea id="f-prompt" rows="4" maxlength="1200" placeholder="How should this bot behave?"></textarea>
       </label>
@@ -137,23 +141,15 @@
     </form>
   </dialog>
 
-  <!-- Settings -->
-  <dialog id="settings-dialog" aria-labelledby="set-title">
-    <form method="dialog" id="settings-form" autocomplete="off">
-      <header class="dlg-head"><h2 id="set-title">Settings</h2></header>
-      <p class="note">Add an Anthropic API key for real AI replies. The key is saved only in this browser and is sent only to api.anthropic.com. Without one, bots answer in demo mode.</p>
-      <label class="field"><span>Anthropic API key</span>
-        <input id="s-key" type="password" placeholder="sk-ant-..." spellcheck="false">
-      </label>
-      <label class="field"><span>Model</span>
-        <input id="s-model" placeholder="claude-sonnet-5-5" spellcheck="false">
-      </label>
-      <footer class="dlg-foot">
-        <button class="btn ghost" id="s-clear" type="button">Remove key</button>
-        <button class="btn ghost" id="s-cancel" type="button">Cancel</button>
-        <button class="btn primary" type="submit">Save</button>
-      </footer>
-    </form>
+  <!-- Connect models -->
+  <dialog id="settings-dialog" class="wide" aria-labelledby="set-title">
+    <header class="dlg-head">
+      <h2 id="set-title">Connect models</h2>
+      <button class="icon-btn" id="s-close" type="button" aria-label="Close">&#10005;</button>
+    </header>
+    <p class="note">Connect any provider you already have access to. Once connected, your account's models unlock and every other model stays locked. Keys are saved only in this browser and are sent only to that provider.</p>
+    <p class="note">ChatGPT and Claude chat subscriptions can't be linked to a website, because those providers don't offer a login for it. The desktop app can use them. OpenRouter sign-in is the closest thing to "log in with an account".</p>
+    <div class="prov-list" id="prov-list"></div>
   </dialog>
 
   <!-- Chat drawer -->
@@ -164,6 +160,7 @@
       <div class="who">
         <h2 id="chat-name">Bot</h2>
         <p id="chat-role"></p>
+        <select id="chat-model" class="mini-select" aria-label="Model for this bot"></select>
       </div>
       <div class="chat-actions">
         <button class="icon-btn" id="chat-edit" type="button" title="Edit bot" aria-label="Edit bot">&#9998;</button>
@@ -172,7 +169,7 @@
         <button class="icon-btn" id="chat-close" type="button" title="Close" aria-label="Close chat">&#10005;</button>
       </div>
     </header>
-    <p class="demo-banner" id="demo-banner" hidden>Demo mode. Add an API key in <button type="button" class="link" id="banner-settings">Settings</button> for real AI replies.</p>
+    <p class="demo-banner" id="demo-banner" hidden>Demo mode. <button type="button" class="link" id="banner-settings">Connect a model</button> for real AI replies.</p>
     <div class="msgs" id="msgs" aria-live="polite"></div>
     <form class="composer" id="composer">
       <textarea id="c-input" rows="1" placeholder="Message..." aria-label="Message"></textarea>

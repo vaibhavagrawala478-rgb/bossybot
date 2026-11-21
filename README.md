@@ -7,8 +7,10 @@
 
 [`site/`](site) is a static page with one boss square on top and 100 agent squares below.
 Click an empty square to hire a bot (name, role, icon, color, instructions). Click a hired square to open its chat.
-The team and chats are saved in your browser. Add an Anthropic API key under the gear icon for real replies; without one, bots answer in demo mode.
-The key stays in your browser and is sent only to `api.anthropic.com`.
+The team and chats are saved in your browser.
+Click **Connect models** to link a provider you already have access to: Anthropic, OpenAI, Google Gemini, xAI, Mistral, DeepSeek, Groq, Together, OpenRouter (sign in once for hundreds of models), a local Ollama or LM Studio server, or any OpenAI-compatible endpoint.
+After you connect, the site loads the models your account can use and unlocks only those; every other model stays locked. Each bot can use its own model.
+Keys stay in your browser and are sent only to the provider. Chat subscriptions (ChatGPT Plus, Claude Pro) can't be linked to a website; the desktop app can use them. With nothing connected, bots answer in demo mode.
 
 Preview locally: `cd site && python -m http.server 8080`, then open <http://localhost:8080>.
 Deploy: the `Deploy BossyBot site` workflow publishes `site/` to GitHub Pages (Settings > Pages > Source: GitHub Actions).
