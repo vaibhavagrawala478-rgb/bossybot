@@ -2,15 +2,36 @@
 
 /* =========================================================
    BossyBot - 1 boss + 100 agent slots, all in the browser.
-   State lives in localStorage. Chats use the Anthropic API
-   (bring your own key) or fall back to a local demo mode.
+   State lives in localStorage. Chats use whichever model
+   providers the visitor connects (their own keys / local
+   models). With nothing connected, bots answer in demo mode.
    ========================================================= */
 
 const SLOT_COUNT = 100;
-const STORE_KEY = "bossybot.v1";
-const DEFAULT_MODEL = "claude-sonnet-5-5";
+const STORE_KEY = "bossybot.v2";
+const OLD_STORE_KEY = "bossybot.v1";
 const MAX_HISTORY = 30;
 
+/* ---------- providers ---------- */
+// kind "anthropic" = Messages API, "openai" = OpenAI-compatible /chat/completions.
+const PROVIDERS = [
+  { id: "anthropic", name: "Anthropic (Claude)", kind: "anthropic", base: "https://api.anthropic.com/v1", keyUrl: "https://console.anthropic.com/settings/keys", ph: "sk-ant-...", def: "claude-sonnet-5-5", models: ["claude-fable-5-2", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"] },
+  { id: "openai", name: "OpenAI (GPT)", kind: "openai", base: "https://api.openai.com/v1", keyUrl: "https://platform.openai.com/api-keys", ph: "sk-...", def: "gpt-4o-mini", models: ["gpt-4o", "gpt-4o-mini", "o4-mini"] },
+  { id: "google", name: "Google (Gemini)", kind: "openai", base: "https://generativelanguage.googleapis.com/v1beta/openai", keyUrl: "https://aistudio.google.com/apikey", ph: "AIza...", def: "gemini-2.5-flash", models: ["gemini-2.5-pro", "gemini-2.5-flash"] },
+  { id: "xai", name: "xAI (Grok)", kind: "openai", base: "https://api.x.ai/v1", keyUrl: "https://console.x.ai", ph: "xai-...", def: "grok-4", models: ["grok-4", "grok-3-mini"] },
+  { id: "mistral", name: "Mistral", kind: "openai", base: "https://api.mistral.ai/v1", keyUrl: "https://console.mistral.ai/api-keys", ph: "API key", def: "mistral-small-latest", models: ["mistral-large-latest", "mistral-small-latest"] },
+  { id: "deepseek", name: "DeepSeek", kind: "openai", base: "https://api.deepseek.com/v1", keyUrl: "https://platform.deepseek.com/api_keys", ph: "sk-...", def: "deepseek-chat", models: ["deepseek-chat", "deepseek-reasoner"] },
+  { id: "groq", name: "Groq", kind: "openai", base: "https://api.groq.com/openai/v1", keyUrl: "https://console.groq.com/keys", ph: "gsk_...", def: "llama-3.3-70b-versatile", models: ["llama-3.3-70b-versatile"] },
+  { id: "together", name: "Together AI", kind: "openai", base: "https://api.together.xyz/v1", keyUrl: "https://api.together.ai/settings/api-keys", ph: "API key", def: "meta-llama/Llama-3.3-70B-Instruct-Turbo", models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo"] },
+  { id: "openrouter", name: "OpenRouter (hundreds of models)", kind: "openai", base: "https://openrouter.ai/api/v1", keyUrl: "https://openrouter.ai/keys", ph: "sk-or-...", def: "openrouter/auto", models: ["openrouter/auto"], oauth: true, blurb: "One sign-in, hundreds of models" },
+  { id: "ollama", name: "Ollama (on your computer)", kind: "openai", base: "http://localhost:11434/v1", noKey: true, editBase: true, models: [], blurb: "Free, local. Start Ollama with OLLAMA_ORIGINS set to this site." },
+  { id: "lmstudio", name: "LM Studio (on your computer)", kind: "openai", base: "http://localhost:1234/v1", noKey: true, editBase: true, models: [], blurb: "Free, local. Turn on CORS in the LM Studio server settings." },
+  { id: "custom", name: "Custom (OpenAI-compatible)", kind: "openai", base: "", editBase: true, optionalKey: true, ph: "API key (if needed)", models: [], blurb: "Any server that speaks the OpenAI chat API" },
+];
+const providerById = (id) => PROVIDERS.find((p) => p.id === id);
+const NON_CHAT = /embed|whisper|tts|dall-e|moderation|image|audio|realtime|transcribe|rerank|guard|speech/i;
+
+/* ---------- roles ---------- */
 const ROLES = [
   { id: "coder", label: "Coder", emoji: "\u{1F4BB}", color: "#35e0ff", prompt: "You are a sharp, pragmatic senior software engineer. Give working code, explain tradeoffs briefly, and ask a question only when the task is truly ambiguous." },
   { id: "writer", label: "Writer", emoji: "✍️", color: "#ff7ac6", prompt: "You are a gifted writer and editor. Produce vivid, clear prose and offer tighter alternatives when asked." },
@@ -25,12 +46,11 @@ const ROLES = [
   { id: "custom", label: "Custom", emoji: "\u{1F916}", color: "#9aa4ff", prompt: "" },
 ];
 const roleById = (id) => ROLES.find((r) => r.id === id) || ROLES[ROLES.length - 1];
-
 const COLORS = ["#ff4d6d", "#ff9f43", "#ffb340", "#f9e65c", "#3ddc97", "#5eead4", "#35e0ff", "#7c5cff", "#a78bfa", "#ff7ac6"];
 
 const BOSS = {
   name: "Bossy",
-  role: "Boss",
+  role: "boss",
   emoji: "\u{1F451}",
   color: "#ffb340",
   prompt: "You are Bossy, the confident, slightly cheeky boss of a team of up to 100 AI agents. You are decisive and useful. When a request fits one of your team members, say who to talk to by name and slot number. Keep answers tight.",
@@ -42,16 +62,23 @@ const SUMMON_SUFFIX = ["bot", "ron", "ix", "o", "zilla", "tron", "ling", "byte",
 /* ---------- state ---------- */
 const state = {
   slots: Array(SLOT_COUNT).fill(null),
-  chats: {}, // key: "boss" | slot index -> [{role, content, error?}]
-  settings: { apiKey: "", model: DEFAULT_MODEL },
+  chats: {}, // "boss" | slot index -> [{role, content, error?}]
+  bossModel: "", // "" = auto, else "providerId|modelId"
+  connections: {}, // providerId -> { key, base, models: [ids], def }
 };
 let openKey = null; // "boss" | index | null
-let editIndex = null; // slot being created/edited
-const busy = new Set(); // keys with a reply in flight
+let editIndex = null;
+let expandedProvider = null;
+const busy = new Set();
 
 function load() {
   try {
-    const raw = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    let raw = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    let migrated = false;
+    if (!raw) {
+      raw = JSON.parse(localStorage.getItem(OLD_STORE_KEY) || "null");
+      migrated = !!raw;
+    }
     if (!raw) return;
     if (Array.isArray(raw.slots)) {
       for (let i = 0; i < SLOT_COUNT; i++) {
@@ -60,9 +87,18 @@ function load() {
       }
     }
     if (raw.chats && typeof raw.chats === "object") state.chats = raw.chats;
-    if (raw.settings) {
-      state.settings.apiKey = String(raw.settings.apiKey || "");
-      state.settings.model = String(raw.settings.model || DEFAULT_MODEL);
+    if (typeof raw.bossModel === "string") state.bossModel = raw.bossModel;
+    if (raw.connections && typeof raw.connections === "object") {
+      for (const [id, c] of Object.entries(raw.connections)) {
+        if (providerById(id) && c && Array.isArray(c.models)) {
+          state.connections[id] = { key: String(c.key || ""), base: String(c.base || ""), models: c.models.map(String), def: String(c.def || c.models[0] || "") };
+        }
+      }
+    }
+    // v1 stored a single Anthropic key.
+    if (migrated && raw.settings && raw.settings.apiKey) {
+      const p = providerById("anthropic");
+      state.connections.anthropic = { key: String(raw.settings.apiKey), base: p.base, models: p.models.slice(), def: String(raw.settings.model || p.def) };
     }
   } catch { /* storage unavailable or corrupt: start fresh */ }
 }
@@ -76,6 +112,7 @@ function sanitizeBot(b) {
     emoji: String(b.emoji || "\u{1F916}").slice(0, 4),
     color: /^#[0-9a-f]{6}$/i.test(b.color) ? b.color : "#9aa4ff",
     prompt: String(b.prompt || "").slice(0, 1200),
+    model: typeof b.model === "string" ? b.model.slice(0, 200) : "",
   };
 }
 
@@ -92,10 +129,62 @@ function toast(msg) {
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => t.classList.remove("show"), 2400);
+  toast.t = setTimeout(() => t.classList.remove("show"), 2800);
 }
-const botFor = (key) => (key === "boss" ? { ...BOSS, role: "boss" } : state.slots[key]);
+const botFor = (key) => (key === "boss" ? { ...BOSS, model: state.bossModel } : state.slots[key]);
 const hired = () => state.slots.filter(Boolean).length;
+const connectedProviders = () => PROVIDERS.filter((p) => state.connections[p.id]);
+
+/* ---------- model selection ---------- */
+function fillModelSelect(sel, current) {
+  sel.textContent = "";
+  sel.appendChild(new Option("Auto (first connected model)", ""));
+  for (const p of PROVIDERS) {
+    const conn = state.connections[p.id];
+    const ids = conn ? conn.models : p.models;
+    if (!ids.length) continue;
+    const g = document.createElement("optgroup");
+    g.label = conn ? p.name : `${p.name} - connect to unlock`;
+    for (const id of ids) {
+      const o = new Option(id, `${p.id}|${id}`);
+      o.disabled = !conn;
+      g.appendChild(o);
+    }
+    sel.appendChild(g);
+  }
+  sel.value = current || "";
+  if (sel.value !== (current || "")) sel.value = "";
+}
+// Returns null (demo mode), { error }, or { p, conn, model }.
+function resolveModel(key) {
+  const pref = botFor(key).model;
+  if (pref) {
+    const [pid, ...rest] = pref.split("|");
+    const model = rest.join("|");
+    const p = providerById(pid);
+    const conn = state.connections[pid];
+    if (!p || !conn) return { error: `${p ? p.name : "That provider"} isn't connected, so ${model} is locked. Connect it under "Connect models", or pick another model for this bot.` };
+    return { p, conn, model };
+  }
+  const first = connectedProviders()[0];
+  return first ? { p: first, conn: state.connections[first.id], model: state.connections[first.id].def } : null;
+}
+function describeModel(key) {
+  const r = resolveModel(key);
+  if (!r) return "Demo mode";
+  if (r.error) return "Locked model";
+  return r.model;
+}
+function refreshModelUi() {
+  const n = connectedProviders().length;
+  const badge = $("nav-badge");
+  badge.hidden = n === 0;
+  badge.textContent = String(n);
+  $("model-status").textContent = n ? `${n} provider${n > 1 ? "s" : ""} connected` : "No models connected - demo mode";
+  $("model-status").classList.toggle("on", n > 0);
+  $("demo-banner").hidden = n > 0;
+  if (openKey !== null) fillModelSelect($("chat-model"), botFor(openKey).model);
+}
 
 /* ---------- grid ---------- */
 function buildGrid() {
@@ -115,11 +204,6 @@ function buildGrid() {
     const i = Number(slot.dataset.i);
     if (state.slots[i]) openChat(i);
     else openBotDialog(i);
-  });
-  grid.addEventListener("pointermove", (e) => {
-    const r = grid.getBoundingClientRect();
-    grid.style.setProperty("--mx", `${e.clientX - r.left}px`);
-    grid.style.setProperty("--my", `${e.clientY - r.top}px`);
   });
 }
 
@@ -199,6 +283,7 @@ function openBotDialog(i) {
   $("bot-save").textContent = bot ? "Save" : "Hire bot";
   $("bot-slot").textContent = `Slot ${i + 1} of ${SLOT_COUNT}`;
   lastPresetPrompt = "";
+  fillModelSelect($("f-model"), bot ? bot.model : "");
   if (bot) {
     $("f-name").value = bot.name;
     $("f-prompt").value = bot.prompt;
@@ -224,6 +309,7 @@ function submitBotForm(e) {
     emoji: $("f-emoji").value.trim() || roleById(formRole).emoji,
     color: formColor,
     prompt: $("f-prompt").value.trim() || roleById(formRole).prompt,
+    model: $("f-model").value,
   });
   save();
   paintSlot(editIndex, isNew);
@@ -240,7 +326,7 @@ function openChat(key) {
   openKey = key;
   renderChatHeader();
   renderMessages();
-  $("demo-banner").hidden = !!state.settings.apiKey;
+  refreshModelUi();
   $("scrim").hidden = false;
   const chat = $("chat");
   chat.setAttribute("aria-hidden", "false");
@@ -265,12 +351,12 @@ function renderChatHeader() {
   $("chat-edit").hidden = boss;
   $("chat-remove").hidden = boss;
   $("c-input").placeholder = `Message ${bot.name}...`;
+  fillModelSelect($("chat-model"), bot.model);
 }
 
 // Minimal, safe formatting: build DOM nodes only, never innerHTML.
 function renderRich(container, text) {
-  const parts = text.split(/```/);
-  parts.forEach((part, idx) => {
+  text.split(/```/).forEach((part, idx) => {
     if (idx % 2 === 1) {
       const pre = el("pre");
       pre.textContent = part.replace(/^[\w-]*\n/, "").replace(/\n$/, "");
@@ -322,8 +408,10 @@ async function sendMessage(text) {
   renderMessages();
 
   try {
-    const reply = state.settings.apiKey ? await askClaude(key, list) : await demoReply(key, text);
-    list.push({ role: "assistant", content: reply });
+    const target = resolveModel(key);
+    if (!target) list.push({ role: "assistant", content: await demoReply(key, text) });
+    else if (target.error) list.push({ role: "assistant", content: target.error, error: true });
+    else list.push({ role: "assistant", content: await askModel(key, list, target) });
   } catch (err) {
     list.push({ role: "assistant", content: errorText(err), error: true });
   } finally {
@@ -334,9 +422,17 @@ async function sendMessage(text) {
 }
 function errorText(err) {
   const msg = err && err.message ? err.message : String(err);
-  if (/401|authentication|invalid x-api-key/i.test(msg)) return "Anthropic rejected the API key. Check it in Settings.";
-  if (/Failed to fetch|NetworkError/i.test(msg)) return "Could not reach Anthropic. Check your connection and try again.";
+  if (/^(401|403)\b/.test(msg)) return `The provider rejected your key or your account can't use this model (${msg}). Check "Connect models".`;
+  if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return "Couldn't reach the provider. Check your connection, and for local models make sure the server is running and allows this site (CORS).";
   return msg;
+}
+async function httpError(res) {
+  let detail = "";
+  try {
+    const j = await res.json();
+    detail = (j.error && (j.error.message || (typeof j.error === "string" ? j.error : ""))) || j.message || "";
+  } catch { /* ignore */ }
+  return `${res.status} ${detail}`.trim();
 }
 
 function systemPromptFor(key) {
@@ -352,68 +448,81 @@ function systemPromptFor(key) {
   return p;
 }
 
-async function askClaude(key, list) {
-  const history = list.filter((m) => !m.error).slice(-MAX_HISTORY).map((m) => ({ role: m.role, content: m.content }));
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": state.settings.apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify({
-      model: state.settings.model || DEFAULT_MODEL,
-      max_tokens: 1024,
-      system: systemPromptFor(key),
-      messages: history,
-      stream: true,
-    }),
-  });
-  if (!res.ok) {
-    let detail = `${res.status}`;
-    try { const j = await res.json(); detail = `${res.status} ${j.error?.message || ""}`.trim(); } catch { /* ignore */ }
-    throw new Error(detail);
-  }
+const baseOf = (p, conn) => (conn.base || p.base).replace(/\/+$/, "");
+const anthropicHeaders = (key) => ({
+  "content-type": "application/json",
+  "x-api-key": key,
+  "anthropic-version": "2023-06-01",
+  "anthropic-dangerous-direct-browser-access": "true",
+});
 
-  // Stream into the typing bubble while the request runs.
+async function askModel(key, list, { p, conn, model }) {
+  const history = list.filter((m) => !m.error).slice(-MAX_HISTORY).map((m) => ({ role: m.role, content: m.content }));
+  const system = systemPromptFor(key);
+  let res;
+  if (p.kind === "anthropic") {
+    res = await fetch(`${baseOf(p, conn)}/messages`, {
+      method: "POST",
+      headers: anthropicHeaders(conn.key),
+      body: JSON.stringify({ model, max_tokens: 1024, system, messages: history, stream: true }),
+    });
+  } else {
+    const headers = { "content-type": "application/json" };
+    if (conn.key) headers.authorization = `Bearer ${conn.key}`;
+    res = await fetch(`${baseOf(p, conn)}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model, messages: [{ role: "system", content: system }, ...history], stream: true }),
+    });
+  }
+  if (!res.ok) throw new Error(await httpError(res));
+
   let acc = "";
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
   for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let idx;
-      while ((idx = buf.indexOf("\n\n")) !== -1) {
-        const evt = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        const line = evt.split("\n").find((l) => l.startsWith("data: "));
-        if (!line) continue;
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) !== -1) {
+      const evt = buf.slice(0, idx);
+      buf = buf.slice(idx + 2);
+      for (const line of evt.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
         let data;
-        try { data = JSON.parse(line.slice(6)); } catch { continue; }
-        if (data.type === "content_block_delta" && data.delta?.type === "text_delta") {
-          acc += data.delta.text;
+        try { data = JSON.parse(payload); } catch { continue; }
+        let piece = "";
+        if (p.kind === "anthropic") {
+          if (data.type === "content_block_delta" && data.delta && data.delta.type === "text_delta") piece = data.delta.text;
+          else if (data.type === "error") throw new Error((data.error && data.error.message) || "Stream error");
+        } else {
+          if (data.error) throw new Error(data.error.message || "Stream error");
+          piece = (data.choices && data.choices[0] && data.choices[0].delta && data.choices[0].delta.content) || "";
+        }
+        if (piece) {
+          acc += piece;
           if (openKey === key) updateLive(acc);
-        } else if (data.type === "error") {
-          throw new Error(data.error?.message || "Stream error");
         }
       }
+    }
   }
   if (!acc) throw new Error("The model returned an empty reply.");
   return acc;
 }
 function updateLive(text) {
-  const box = $("msgs");
-  let node = $("typing");
+  const node = $("typing");
   if (!node) return;
   node.textContent = "";
   renderRich(node, text);
+  const box = $("msgs");
   box.scrollTop = box.scrollHeight;
 }
 
-/* ---------- demo mode (no API key) ---------- */
+/* ---------- demo mode (nothing connected) ---------- */
 const DEMO = {
   coder: ["Let's break that into small functions first. Want me to sketch the structure?", "I'd start with the simplest version that works, then add tests. What language are we in?"],
   writer: ["Good seed. Let me draft an opening line and we'll bend it from there.", "Lead with the strongest image, cut the first paragraph, and see if it still stands."],
@@ -425,7 +534,7 @@ const DEMO = {
   comedian: ["I'd tell a joke, but my demo mode is on a budget. Picture a really good one here.", "Funny thing about that: it's also true. Go on."],
   teacher: ["Let's start simple, then build up. What part feels fuzzy?", "Try explaining it back to me in your own words and I'll fix the gaps."],
   strategist: ["Name the goal, the constraint, and the biggest risk. Then we pick one path.", "Most options look equal until you price the downside. What is yours?"],
-  custom: ["Got it. I'm in demo mode, so my replies are canned. Add an API key in Settings and I'll really think.", "Interesting. Tell me more."],
+  custom: ["Got it. I'm in demo mode, so my replies are canned. Connect a model and I'll really think.", "Interesting. Tell me more."],
 };
 function demoReply(key, text) {
   return new Promise((resolve) => {
@@ -453,18 +562,17 @@ function summonAll() {
   if (!empties) return toast("All 100 slots are already filled");
   for (let i = 0; i < SLOT_COUNT; i++) {
     if (state.slots[i]) continue;
-    const role = ROLES[i % 10]; // the ten named roles
+    const role = ROLES[i % 10];
     const name = SUMMON_PREFIX[i % 10] + SUMMON_SUFFIX[Math.floor(i / 10)];
     state.slots[i] = sanitizeBot({ name, role: role.id, emoji: role.emoji, color: role.color, prompt: role.prompt });
   }
   save();
-  // staggered pop-in
   for (let i = 0; i < SLOT_COUNT; i++) setTimeout(() => paintSlot(i, true), i * 12);
   $("count").textContent = String(hired());
   toast(`Summoned ${empties} agents`);
 }
 function resetAll() {
-  if (!confirm("Remove all bots and clear every chat? Your API key is kept.")) return;
+  if (!confirm("Remove all bots and clear every chat? Your connected models are kept.")) return;
   closeChat();
   state.slots.fill(null);
   state.chats = {};
@@ -473,10 +581,160 @@ function resetAll() {
   toast("Team cleared");
 }
 
-/* ---------- settings ---------- */
+/* ---------- connecting models ---------- */
+async function fetchModels(p, key, base) {
+  const url = `${base.replace(/\/+$/, "")}/models${p.kind === "anthropic" ? "?limit=1000" : ""}`;
+  const headers = p.kind === "anthropic" ? anthropicHeaders(key) : key ? { authorization: `Bearer ${key}` } : {};
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw new Error(await httpError(res));
+  const j = await res.json();
+  const arr = Array.isArray(j) ? j : j.data || j.models || [];
+  let ids = arr.map((m) => (typeof m === "string" ? m : m.id || m.name)).filter(Boolean).map((id) => String(id).replace(/^models\//, ""));
+  if (p.kind !== "anthropic") ids = ids.filter((id) => !NON_CHAT.test(id));
+  ids = [...new Set(ids)].sort((a, b) => a.localeCompare(b));
+  if (!ids.length) throw new Error("Connected, but no chat models were returned for this account.");
+  return ids;
+}
+async function connectProvider(p, key, base) {
+  const useBase = (base || p.base).trim();
+  if (p.editBase && !/^https?:\/\/.+/i.test(useBase)) throw new Error("Enter a server address starting with http:// or https://");
+  if (!p.noKey && !p.optionalKey && !key) throw new Error("Paste your API key first.");
+  const models = await fetchModels(p, key, useBase);
+  const def = models.includes(p.def) ? p.def : models[0];
+  state.connections[p.id] = { key, base: p.editBase ? useBase : "", models, def };
+  save();
+  refreshModelUi();
+  return models.length;
+}
+function disconnectProvider(p) {
+  delete state.connections[p.id];
+  // Bots pinned to a model of this provider keep their choice but become locked.
+  save();
+  refreshModelUi();
+}
+
+// OpenRouter "sign in" (OAuth PKCE): returns an API key tied to the visitor's account.
+const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+async function startOpenRouterLogin() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  try { sessionStorage.setItem("bossybot.or", verifier); } catch { throw new Error("Your browser blocked temporary storage, which sign-in needs."); }
+  const cb = location.origin + location.pathname;
+  location.href = `https://openrouter.ai/auth?callback_url=${encodeURIComponent(cb)}&code_challenge=${challenge}&code_challenge_method=S256`;
+}
+async function finishOpenRouterLogin() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get("code");
+  let verifier = null;
+  try { verifier = sessionStorage.getItem("bossybot.or"); } catch { /* ignore */ }
+  if (!code || !verifier) return;
+  history.replaceState(null, "", location.pathname + location.hash);
+  try { sessionStorage.removeItem("bossybot.or"); } catch { /* ignore */ }
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/auth/keys", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code, code_verifier: verifier, code_challenge_method: "S256" }),
+    });
+    if (!res.ok) throw new Error(await httpError(res));
+    const { key } = await res.json();
+    const n = await connectProvider(providerById("openrouter"), key, "");
+    toast(`OpenRouter connected: ${n} models unlocked`);
+  } catch (err) {
+    toast(`OpenRouter sign-in failed: ${errorText(err)}`);
+  }
+}
+
+function renderProviders() {
+  const list = $("prov-list");
+  list.textContent = "";
+  for (const p of PROVIDERS) {
+    const conn = state.connections[p.id];
+    const row = el("div", `prov${conn ? " on" : ""}`);
+    const top = el("div", "prov-top");
+    const title = el("div", "prov-title");
+    title.append(el("strong", "", p.name), el("small", "", conn ? `${conn.models.length} models unlocked` : p.blurb || "Not connected"));
+    const btn = el("button", "btn small" + (conn ? "" : " primary"), conn ? "Manage" : "Connect");
+    btn.type = "button";
+    btn.setAttribute("aria-expanded", String(expandedProvider === p.id));
+    btn.addEventListener("click", () => { expandedProvider = expandedProvider === p.id ? null : p.id; renderProviders(); });
+    top.append(title, btn);
+    row.appendChild(top);
+
+    if (expandedProvider === p.id) {
+      const form = el("form", "prov-form");
+      form.autocomplete = "off";
+      const baseIn = document.createElement("input");
+      const keyIn = document.createElement("input");
+      if (p.editBase) {
+        const l = el("label", "field");
+        l.append(el("span", "", "Server address"));
+        baseIn.value = (conn && conn.base) || p.base;
+        baseIn.placeholder = "https://your-server/v1";
+        baseIn.spellcheck = false;
+        l.appendChild(baseIn);
+        form.appendChild(l);
+      }
+      if (!p.noKey) {
+        const l = el("label", "field");
+        l.append(el("span", "", p.optionalKey ? "API key (optional)" : "API key"));
+        keyIn.type = "password";
+        keyIn.placeholder = p.ph || "";
+        keyIn.spellcheck = false;
+        keyIn.value = conn ? conn.key : "";
+        l.appendChild(keyIn);
+        form.appendChild(l);
+      }
+      const err = el("p", "prov-err");
+      err.hidden = true;
+      const actions = el("div", "prov-actions");
+      if (p.oauth) {
+        const o = el("button", "btn small primary", "Sign in with OpenRouter");
+        o.type = "button";
+        o.addEventListener("click", () => startOpenRouterLogin().catch((e) => { err.textContent = e.message; err.hidden = false; }));
+        actions.appendChild(o);
+      }
+      const go = el("button", "btn small" + (p.oauth ? " ghost" : " primary"), conn ? "Save & refresh models" : p.oauth ? "Use a key instead" : "Connect");
+      go.type = "submit";
+      actions.appendChild(go);
+      if (conn) {
+        const d = el("button", "btn small ghost", "Disconnect");
+        d.type = "button";
+        d.addEventListener("click", () => { disconnectProvider(p); renderProviders(); toast(`${p.name} disconnected`); });
+        actions.appendChild(d);
+      }
+      if (p.keyUrl) {
+        const a = el("a", "get-key", "Get a key");
+        a.href = p.keyUrl;
+        a.target = "_blank";
+        a.rel = "noopener";
+        actions.appendChild(a);
+      }
+      form.append(err, actions);
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        go.disabled = true;
+        go.textContent = "Checking...";
+        err.hidden = true;
+        try {
+          const n = await connectProvider(p, keyIn.value.trim(), baseIn.value);
+          toast(`${p.name} connected: ${n} models unlocked`);
+          expandedProvider = null;
+          renderProviders();
+        } catch (ex) {
+          err.textContent = errorText(ex);
+          err.hidden = false;
+          go.disabled = false;
+          go.textContent = conn ? "Save & refresh models" : "Connect";
+        }
+      });
+      row.appendChild(form);
+    }
+    list.appendChild(row);
+  }
+}
 function openSettings() {
-  $("s-key").value = state.settings.apiKey;
-  $("s-model").value = state.settings.model;
+  renderProviders();
   $("settings-dialog").showModal();
 }
 
@@ -520,6 +778,7 @@ function init() {
   buildGrid();
   buildFormControls();
   paintAll();
+  refreshModelUi();
 
   $("boss").addEventListener("click", () => openChat("boss"));
   $("summon").addEventListener("click", summonAll);
@@ -529,17 +788,14 @@ function init() {
   $("bot-cancel").addEventListener("click", () => $("bot-dialog").close());
 
   $("open-settings").addEventListener("click", openSettings);
+  $("model-status").addEventListener("click", openSettings);
   $("banner-settings").addEventListener("click", openSettings);
-  $("s-cancel").addEventListener("click", () => $("settings-dialog").close());
-  $("s-clear").addEventListener("click", () => { $("s-key").value = ""; });
-  $("settings-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    state.settings.apiKey = $("s-key").value.trim();
-    state.settings.model = $("s-model").value.trim() || DEFAULT_MODEL;
+  $("s-close").addEventListener("click", () => $("settings-dialog").close());
+
+  $("chat-model").addEventListener("change", (e) => {
+    if (openKey === "boss") state.bossModel = e.target.value;
+    else if (typeof openKey === "number" && state.slots[openKey]) state.slots[openKey].model = e.target.value;
     save();
-    $("demo-banner").hidden = !!state.settings.apiKey;
-    $("settings-dialog").close();
-    toast(state.settings.apiKey ? "Key saved. Bots will use real AI." : "Key removed. Demo mode on.");
   });
 
   $("scrim").addEventListener("click", closeChat);
@@ -581,5 +837,6 @@ function init() {
   });
 
   setupDownloads();
+  finishOpenRouterLogin();
 }
 init();
