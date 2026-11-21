@@ -791,6 +791,7 @@ function init() {
   $("model-status").addEventListener("click", openSettings);
   $("banner-settings").addEventListener("click", openSettings);
   $("s-close").addEventListener("click", () => $("settings-dialog").close());
+  $("subs-dl").addEventListener("click", () => $("settings-dialog").close());
 
   $("chat-model").addEventListener("change", (e) => {
     if (openKey === "boss") state.bossModel = e.target.value;
